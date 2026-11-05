@@ -1,8 +1,9 @@
 # Admin UI HTTP API
 
-The API is registered by `AdminAdapter` through the host's runtime API host.
-The dashboard is served at `/`, `/index.html`, and `/admin`. The configured
-port defaults to `8080` (`admin.adminPort`).
+The API is registered by `AdminAdapter` through `IWebEndpointRegistry`.
+The dashboard is served at `/`, `/index.html`, and `/admin` by the separate
+`ioBroker-NewGen.web` adapter. The configured port defaults to `8080`
+(`web.port`).
 
 Protected API calls use the host's authentication/session and permission
 services. Request methods, payload validation, and permissions are enforced by

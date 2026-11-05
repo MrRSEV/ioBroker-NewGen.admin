@@ -4,12 +4,13 @@
 
 `AdminAdapter` derives from `DeviceAdapterBase` and identifies itself as
 `admin`. It is an external custom-adapter assembly, not a second host process.
-The host supplies the `IAdapterContext`, including configuration, logging,
-the HTTP API host, security services, adapter registry, and state matrix.
+The host supplies the `IAdapterContext`, including configuration, logging, the
+`IWebEndpointRegistry`, security services, adapter registry, and state matrix.
 
-The adapter registers its endpoints during `OnStartAsync` and starts the
-provided API host on `admin.adminPort` (default `8080`). When stopped, it stops
-the API host and clears its registration state so the adapter can be restarted.
+The adapter registers its endpoints during `OnStartAsync`. The separate
+[`ioBroker-NewGen.web`](https://github.com/MrRSEV/ioBroker-NewGen.web) adapter
+owns the HTTP listener on `web.listenHost`/`web.port` (default `127.0.0.1:8080`).
+When stopped, Admin UI unregisters its routes so it can be restarted cleanly.
 `admin.adminEnabled` controls whether the service is started.
 
 The dashboard document and client-side code are embedded in
@@ -24,6 +25,7 @@ asset pipeline is required.
 | Adapter API, registry and state matrix | NewGen host |
 | Authentication, sessions, users, roles and permissions | Host Core.Security |
 | Dashboard and Admin-specific HTTP endpoints | Admin UI adapter |
+| HTTP/WebSocket listener | External `ioBroker-NewGen.web` adapter |
 
 The adapter should use host contracts rather than introducing duplicate
 registries, state stores, or security implementations. Changes to
@@ -37,14 +39,13 @@ registries, state stores, or security implementations. Changes to
   under `lib`.
 - `lib/ioBroker-NewGen.dll` is the host API contract used at compile time.
 - `lib/RSEV.Utilities.dll` is the shared runtime dependency.
-- The project output is the sibling `dev/bin/AdminUI.dll`.
-- The host loads the deployed assembly from `Adapters/custom`. The host project
+- The project output is `bin/AdminUI.dll` in this repository.
+- The host loads the deployed assembly from `Adapters/native`. The host project
   copies that directory to its build and publish output, preserving nested
   paths.
 
 Build the adapter from this directory with `dotnet build AdminUI.csproj`.
-Deploy the resulting DLL to the host's `Adapters/custom` directory before
-building or publishing the host.
+Deploy the resulting DLL manually to the runtime's `Adapters/native` directory.
 
 ## Authentication and permissions
 

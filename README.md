@@ -11,8 +11,11 @@ is not part of the host executable.
 - Serve the dashboard at `/`, `/index.html`, and `/admin`.
 - Expose the HTTP API for authentication, states, adapters, configuration,
   logs, overview, localization, and user/role administration.
-- Use the host's adapter context, API host, configuration, security services,
-  adapter registry, and matrix instead of owning separate runtime services.
+- Use the host's adapter context, `IWebEndpointRegistry`, configuration,
+  security services, adapter registry, and matrix instead of owning separate
+  runtime services or an HTTP listener. The listener is provided by the
+  separate [`ioBroker-NewGen.web`](https://github.com/MrRSEV/ioBroker-NewGen.web)
+  adapter.
 
 The dashboard markup and client-side code are currently embedded in
 [`AdminAdapter.cs`](./AdminAdapter.cs). There is no separate frontend build.
@@ -31,10 +34,10 @@ From this directory:
 dotnet build AdminUI.csproj
 ```
 
-The project writes `AdminUI.dll` to the sibling `dev/bin` directory, as
-configured by `AdminUI.csproj`. Copy that assembly to the host repository's
-`Adapters/custom/AdminUI.dll` before building or publishing the host. The host
-copies files from `Adapters/custom` into its output and publish directories.
+The project writes `AdminUI.dll` to this repository's `bin` directory, as
+configured by `AdminUI.csproj`. Copy that assembly manually to
+`Adapters/native/AdminUI.dll` in the runtime deployment. The release builder
+includes a separately built DLL automatically when it is available.
 
 ## Runtime configuration
 
@@ -42,19 +45,20 @@ The adapter reads the following keys from `config.toml`:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `admin.adminEnabled` | `true` | Enables or disables the HTTP service. |
-| `admin.adminPort` | `8080` | Port used by the host API server. |
+| `admin.adminEnabled` | `true` | Enables or disables endpoint registration. |
+| `web.port` | `8080` | Port used by the separate web adapter. |
 | `admin.adminRequireAuthentication` | `true` in the default config | Requires the host security service for interactive login. |
 
-The host must also load and enable the adapter, typically by including `admin`
-in `adapter.enabledAdapters`. Authentication and endpoint permissions are
-provided by the host's Core.Security services.
+The adapter declares `web` as a runtime dependency. The host must therefore
+load the separate `web` adapter and enable `admin` when the UI is needed.
+Authentication and endpoint permissions are provided by the host's
+Core.Security services.
 
 ## Project documentation
 
-- [Architecture and development](./docs/architecture.md)
-- [HTTP API routes](./docs/api.md)
+- [Architecture and development](./doc/architecture.md)
+- [HTTP API routes](./doc/api.md)
 
-This directory is maintained separately from the `ioBroker-NewGen` host
-repository. Keep host and Admin UI changes coordinated when changing adapter
-contracts or runtime APIs.
+This project is maintained separately from the runtime and web-adapter
+repositories. Keep host, web adapter and Admin UI changes coordinated when
+changing adapter contracts or runtime APIs.

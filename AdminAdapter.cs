@@ -15,6 +15,7 @@ using ioBroker_NewGen.Core.Bus;
 using ioBroker_NewGen.Core.Matrix;
 using ioBroker_NewGen.Core.Registry;
 using ioBroker_NewGen.Core.Routing;
+using ioBroker_NewGen.Core.Web;
 using RSEV.Utilities.ApiBuilder;
 
 namespace ioBroker_NewGen.Admin
@@ -27,11 +28,11 @@ namespace ioBroker_NewGen.Admin
     {
         private bool _enabled = true;
         private bool _registered;
-        private volatile bool _stopping;
-        private Task? _startTask;
         private bool _authenticationRequired;
 
         public override string Name => "admin";
+
+        public override IReadOnlyCollection<string> Dependencies => new[] { "web" };
 
         protected override Task OnStartAsync(CancellationToken cancellationToken)
         {
@@ -54,94 +55,120 @@ namespace ioBroker_NewGen.Admin
                 Context.RuntimeContext.Logger.LogWarning("[AdminUI] Core.Security ist nicht initialisiert. Anmeldung nur über den optionalen Automations-Token (admin.adminToken) möglich.");
             }
 
-            _stopping = false;
+            foreach (var route in new[] { "/", "/index.html", "/admin" })
+            {
+                Context.WebEndpoints.Register(Id, new DashboardEndpoint(route));
+            }
+            Context.WebEndpoints.Register(Id, new LoginEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AuthStatusEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new FirstRunSetupEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new LogoutEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new MeEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new ChangePasswordEndpoint(Context));
+            foreach (var i18nMode in new[] { "languages", "translations", "translate", "extend" })
+            {
+                Context.WebEndpoints.Register(Id, new I18nEndpoint(i18nMode, Context));
+            }
+            Context.WebEndpoints.Register(Id, new StatesEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AdaptersEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AdapterConfigEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AdapterOAuthEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AdapterCommandEndpoint("/api/adapters/start", Context, "start"));
+            Context.WebEndpoints.Register(Id, new AdapterCommandEndpoint("/api/adapters/stop", Context, "stop"));
+            Context.WebEndpoints.Register(Id, new AdapterCommandEndpoint("/api/adapters/restart", Context, "restart"));
+            Context.WebEndpoints.Register(Id, new AutostartEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new InstanceEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new LegacyAdapterEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new TasksEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new AdapterInstallEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new RemoteAdapterInstallEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new ConfigurationEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new LogsEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new OverviewEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new PermissionEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new RoleEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new UserRoleEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new SecurityUsersEndpoint(Context));
+            Context.WebEndpoints.Register(Id, new SecurityRolesEndpoint(Context));
+            _registered = true;
 
-            var port = 8080;
+            RegisterInfoObjects();
+            Context.RuntimeContext.Logger.LogInfo("[AdminUI] Endpoints beim separaten Web-Adapter registriert.");
+            return Task.CompletedTask;
+        }
+
+        private const string InfoPrefix = "admin.0.info.";
+
+        /// <summary>Legt den Objektbaum admin / admin.0 / admin.0.info mit den schreibgeschützten Info-States an.</summary>
+        private void RegisterInfoObjects()
+        {
+            var matrix = Context.Matrix;
+            void Obj(string id, string name, string type, string? role = null, string? valueType = null, string? desc = null, bool readOnly = false)
+            {
+                var meta = new Dictionary<string, string>();
+                if (readOnly)
+                {
+                    meta["read"] = "true";
+                    meta["write"] = "false";
+                    meta["readonly"] = "true";
+                }
+
+                if (desc is not null)
+                {
+                    meta["desc"] = desc;
+                }
+
+                matrix.RegisterObject(new MatrixObject
+                {
+                    Id = id,
+                    Name = name,
+                    Type = type,
+                    Meta = meta,
+                    StateDefinition = type == "state" ? new StateDefinition { ValueType = valueType, Role = role } : null
+                });
+            }
+
+            Obj("admin", "admin", "adapter");
+            Obj("admin.0", "Benutzerdateien und Bilder für den Hintergrund", "meta");
+            Obj("admin.0.info", "Information", "channel");
+            Obj(InfoPrefix + "connected", "Informationen über verbundene Socket-Clients", "state", "state", "string", readOnly: true);
+            Obj(InfoPrefix + "connection", "HTTP-Server gestartet", "state", "indicator.connected", "bool", readOnly: true);
+            Obj(InfoPrefix + "lastUpdateCheck", "Zeitstempel der letzten UpdatePrüfung", "state", "value.time", "string", readOnly: true);
+            Obj(InfoPrefix + "newUpdates", "Anzeige, ob neue Adapter-Updates verfügbar sind", "state", "indicator.updates", "bool", readOnly: true);
+            Obj(InfoPrefix + "newsETag", "Etag für Newsfeed", "state", "state", "string", readOnly: true);
+            Obj(InfoPrefix + "newsFeed", "Letzter Newsfeed als JSON", "state", "state", "string", readOnly: true);
+            Obj(InfoPrefix + "newsLastId", "Letzte Nachrichten-ID", "state", "state", "string", readOnly: true);
+            Obj(InfoPrefix + "updatesJson", "JSON-String mit Adapteraktualisierungsinformationen", "state", "indicator.updates", "string", readOnly: true);
+            Obj(InfoPrefix + "updatesList", "Liste der zu aktualisierenden Adapter", "state", "state", "string", readOnly: true);
+            Obj(InfoPrefix + "updatesNumber", "Anzahl der zu aktualisierenden Adapter", "state", "state", "int", readOnly: true);
+
+            matrix.SetState(InfoPrefix + "connected", "[1]admin");
+            matrix.SetState(InfoPrefix + "connection", true);
+            matrix.SetState(InfoPrefix + "lastUpdateCheck", DateTime.Now.ToString("R"));
+            matrix.SetState(InfoPrefix + "newUpdates", false);
+            matrix.SetState(InfoPrefix + "updatesJson", "{}");
+            matrix.SetState(InfoPrefix + "updatesNumber", 0);
+        }
+
+        protected override Task OnStopAsync(CancellationToken cancellationToken)
+        {
             try
             {
-                port = Config.Get<int>("admin.adminPort");
+                Context.Matrix.SetState(InfoPrefix + "connection", false);
             }
             catch
             {
             }
 
-            foreach (var route in new[] { "/", "/index.html", "/admin" })
+            foreach (var route in Context.WebEndpoints.Registrations
+                         .Where(registration => string.Equals(registration.OwnerId, Id, StringComparison.OrdinalIgnoreCase))
+                         .Select(registration => registration.Route)
+                         .ToArray())
             {
-                Context.ApiHost.Register(new DashboardEndpoint(route));
+                Context.WebEndpoints.Unregister(Id, route);
             }
-            Context.ApiHost.Register(new LoginEndpoint(Context));
-            Context.ApiHost.Register(new AuthStatusEndpoint(Context));
-            Context.ApiHost.Register(new FirstRunSetupEndpoint(Context));
-            Context.ApiHost.Register(new LogoutEndpoint(Context));
-            Context.ApiHost.Register(new MeEndpoint(Context));
-            Context.ApiHost.Register(new ChangePasswordEndpoint(Context));
-            foreach (var i18nMode in new[] { "languages", "translations", "translate", "extend" })
-            {
-                Context.ApiHost.Register(new I18nEndpoint(i18nMode, Context));
-            }
-            Context.ApiHost.Register(new StatesEndpoint(Context));
-            Context.ApiHost.Register(new AdaptersEndpoint(Context));
-            Context.ApiHost.Register(new AdapterConfigEndpoint(Context));
-            Context.ApiHost.Register(new AdapterOAuthEndpoint(Context));
-            Context.ApiHost.Register(new AdapterCommandEndpoint("/api/adapters/start", Context, "start"));
-            Context.ApiHost.Register(new AdapterCommandEndpoint("/api/adapters/stop", Context, "stop"));
-            Context.ApiHost.Register(new AdapterCommandEndpoint("/api/adapters/restart", Context, "restart"));
-            Context.ApiHost.Register(new AutostartEndpoint(Context));
-            Context.ApiHost.Register(new InstanceEndpoint(Context));
-            Context.ApiHost.Register(new LegacyAdapterEndpoint(Context));
-            Context.ApiHost.Register(new TasksEndpoint(Context));
-            Context.ApiHost.Register(new AdapterInstallEndpoint(Context));
-            Context.ApiHost.Register(new RemoteAdapterInstallEndpoint(Context));
-            Context.ApiHost.Register(new ConfigurationEndpoint(Context));
-            Context.ApiHost.Register(new LogsEndpoint(Context));
-            Context.ApiHost.Register(new OverviewEndpoint(Context));
-            Context.ApiHost.Register(new PermissionEndpoint(Context));
-            Context.ApiHost.Register(new RoleEndpoint(Context));
-            Context.ApiHost.Register(new UserRoleEndpoint(Context));
-            Context.ApiHost.Register(new SecurityUsersEndpoint(Context));
-            Context.ApiHost.Register(new SecurityRolesEndpoint(Context));
-            _registered = true;
-
-            var startTask = Context.ApiHost.StartAsync(port, cancellationToken);
-            _startTask = startTask;
-            _ = startTask.ContinueWith(
-                task =>
-                {
-                    if (!_stopping && task.IsFaulted && task.Exception is not null)
-                    {
-                        Context.RuntimeContext.Logger.LogError($"[AdminUI] Start fehlgeschlagen: {task.Exception.GetBaseException()}");
-                    }
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted,
-                TaskScheduler.Default);
-            Context.RuntimeContext.Logger.LogInfo($"[AdminUI] Admin-Dependency-Adapter auf Port {port} gestartet.");
-            return Task.CompletedTask;
-        }
-
-        protected override async Task OnStopAsync(CancellationToken cancellationToken)
-        {
-            _stopping = true;
-            if (Context.ApiHost.IsRunning)
-            {
-                Context.ApiHost.Stop();
-            }
-
-            // Auf das Ende der Accept-Schleife warten, damit ein Neustart nicht vom späten "Gestoppt" des alten Laufs überholt wird.
-            var pending = _startTask;
-            if (pending is not null)
-            {
-                try
-                {
-                    await Task.WhenAny(pending, Task.Delay(3000, CancellationToken.None)).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
-            }
-
-            _startTask = null;
             _registered = false;
+            return Task.CompletedTask;
         }
 
         /// <summary>Admin-UI-Task-Manager: führt lange Aktionen parallel im Hintergrund aus und hält ein abrufbares Fortschrittslog vor.</summary>
@@ -375,6 +402,17 @@ namespace ioBroker_NewGen.Admin
                     th,td{border-bottom:1px solid var(--divider);padding:.35rem .6rem;text-align:left;font-size:1em}
                     th{background:var(--th);font-weight:600;position:sticky;top:0}
                     table.tree tr:hover td{background:var(--hover)}
+                    table.objtree{table-layout:fixed;font-size:13px}
+                    table.objtree th{height:32px;text-align:left;padding:0 .5rem}
+                    table.objtree td{height:32px;padding:0 .5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border:0}
+                    table.objtree th:nth-child(1){width:26%}table.objtree th:nth-child(2){width:30%}table.objtree th:nth-child(3){width:9%}table.objtree th:nth-child(4){width:15%}table.objtree th:nth-child(6){width:3rem}
+                    table.objtree tr:hover td{background:var(--hover)}
+                    table.objtree tr.sel td{background:#1e88e5;color:#fff}
+                    .oico{display:inline-block;width:1.6rem;text-align:center;margin-right:.4rem}
+                    .oid{font-size:14px}
+                    .otype{display:inline-flex;align-items:center;gap:.4rem;font-size:11px}
+                    .obox{display:inline-block;width:16px;height:16px;line-height:14px;border:1px solid currentColor;border-radius:3px;text-align:center;font-style:normal;font-size:10px}
+                    .ogear{text-align:center;color:var(--text2)}
                     .arrow{display:inline-block;width:1.1rem;font-size:.7rem;color:var(--text2)}
                     .folder{font-weight:600}
                     .muted{color:var(--text2)}
@@ -480,6 +518,25 @@ namespace ioBroker_NewGen.Admin
                     const top=expandKeys(data);if(top!==null&&typeof top==='object'){for(const [k,x] of entriesOf(top))addRows(x,k,0,k);}else{addRows(top,'Wert',0,'value');}
                     box.replaceChildren(table);}
                     const treeToggled=new Set();
+                    let objSel='';
+                    function renderObjects(list){const box=$('statesTable');if(list&&!Array.isArray(list)&&typeof list.error==='string'){box.textContent=list.error;return;}if(!Array.isArray(list)||!list.length){box.textContent=t('ui.noData','Keine Daten');return;}
+                    const root={name:'',path:'',children:new Map(),item:null};
+                    for(const o of list){let node=root,path='';for(const part of String(o.Id).split('.')){path=path?path+'.'+part:part;if(!node.children.has(part))node.children.set(part,{name:part,path,children:new Map(),item:null});node=node.children.get(part);}node.item=o;}
+                    const table=document.createElement('table');table.className='objtree';const head=table.createTHead().insertRow();for(const title of [t('table.id','ID'),t('table.name','Name'),t('table.type','Typ'),t('table.role','Rolle'),t('table.value','Wert'),'']){const th=document.createElement('th');th.textContent=title;head.appendChild(th);}
+                    const body=table.createTBody();
+                    const fmtVal=v=>v===null||v===undefined?'':typeof v==='object'?JSON.stringify(v):String(v);
+                    function addNode(node,depth){const kids=[...node.children.values()].sort((x,y)=>x.name.localeCompare(y.name,undefined,{numeric:true}));const expandable=kids.length>0;const key='obj:'+node.path;const open=expandable&&(treeToggled.has(key)?depth>=3:depth<3);const item=node.item;const isState=item&&item.Type==='state';
+                    const row=body.insertRow();if(objSel===node.path)row.className='sel';
+                    row.onclick=()=>{objSel=node.path;if(expandable){if(treeToggled.has(key))treeToggled.delete(key);else treeToggled.add(key);}renderObjects(list);};
+                    const c0=row.insertCell();c0.className='oid';c0.style.paddingLeft=(0.6+depth*1.6)+'rem';c0.append(el('span',{className:'oico',textContent:isState?'\uD83D\uDCC4':open?'\uD83D\uDCC2':'\uD83D\uDCC1'}),el('span',{textContent:node.name}));
+                    const c1=row.insertCell();c1.className='oname';c1.title=item?item.Name:'';c1.append(el('span',{className:'oico',textContent:item?(item.Type==='adapter'||item.Type==='meta'?'\u2699':item.Type==='channel'?'\u24D8':(item.State&&item.State.Value!==null&&item.Meta&&item.Meta.read==='true'&&/connected/.test(node.name)?'\uD83D\uDCF6':'')):''}),document.createTextNode(item&&item.Name&&item.Name!==node.name?item.Name:''));
+                    const c2=row.insertCell();if(item){c2.append(el('span',{className:'otype'},el('i',{className:'obox',textContent:isState?'\u25A1':''}),document.createTextNode(item.Type)));}
+                    const c3=row.insertCell();c3.textContent=item&&item.StateDefinition&&item.StateDefinition.Role?item.StateDefinition.Role:(isState?'state':'');
+                    const c4=row.insertCell();c4.className='oval';const val=isState&&item.State?fmtVal(item.State.Value):'';c4.textContent=val;c4.title=val;
+                    const c5=row.insertCell();c5.className='ogear';c5.textContent=isState?'\u2699':'';
+                    if(open)for(const kid of kids)addNode(kid,depth+1);}
+                    for(const kid of [...root.children.values()].sort((x,y)=>x.name.localeCompare(y.name,undefined,{numeric:true})))addNode(kid,0);
+                    box.replaceChildren(table);}
                     function fmtDate(v){if(!v)return '';const d=new Date(v);return isNaN(d)?String(v):d.toLocaleString('de-DE');}
                     const perms=new Set();
                     function fmtDur(s){s=Math.max(0,Math.floor(Number(s)||0));const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;return (d?d+'d ':'')+(d||h?h+'h ':'')+(d||h||m?m+'m ':'')+x+'s';}
@@ -617,7 +674,7 @@ namespace ioBroker_NewGen.Admin
                     if(canR&&Array.isArray(lastRoles)){rm.className='mgr';rm.append(el('h3',{},el('span',{textContent:t('ui.groups','Gruppen')}),el('button',{type:'button',className:'btn',textContent:'+ '+t('ui.newRole','Neue Gruppe'),onclick:()=>roleDialog(null)})));
                     rm.append(mgrTable([t('table.name','Name'),t('table.description','Beschreibung'),t('table.permissions','Berechtigungen'),t('table.actions','Aktionen')],lastRoles.map(r=>[r.name,r.description||'',(r.permissions||[]).join(', '),r.builtin?el('span',{className:'muted',textContent:t('ui.builtin','vordefiniert')}):el('span',{},mgrBtn(t('action.edit','Bearbeiten'),()=>roleDialog(r)),' ',mgrBtn(t('action.delete','Löschen'),()=>removeEntry('/api/security/roles',{action:'delete',name:r.name},t('confirm.deleteRole','Gruppe wirklich löschen?')+' '+r.name))) ])));}}
                     async function loadJson(path){try{return await api(path);}catch(error){if(error.message==='Nicht angemeldet')throw error;return {error:error.message};}}
-                    async function refresh(){try{const [states,adapters,config,roles,users]=await Promise.all([loadJson('/api/states'),loadJson('/api/adapters'),loadJson('/api/config'),loadJson('/api/roles'),loadJson('/api/users')]);$('states').textContent=JSON.stringify(states,null,2);renderTree('states',states);$('adapters').textContent=JSON.stringify(adapters,null,2);renderAdapters(adapters);refreshOverview(adapters);renderInstances(adapters);loadLegacy();$('config').textContent=JSON.stringify(config,null,2);renderTree('config',config);$('roles').textContent=JSON.stringify(roles,null,2);renderTree('roles',roles);$('users').textContent=JSON.stringify(users,null,2);renderTree('users',users);lastUsers=users;lastRoles=roles;renderManage();$('status').textContent=' Verbunden';}catch(error){$('status').textContent=' '+error.message;}}
+                    async function refresh(){try{const [states,adapters,config,roles,users]=await Promise.all([loadJson('/api/states'),loadJson('/api/adapters'),loadJson('/api/config'),loadJson('/api/roles'),loadJson('/api/users')]);$('states').textContent=JSON.stringify(states,null,2);renderObjects(states);$('adapters').textContent=JSON.stringify(adapters,null,2);renderAdapters(adapters);refreshOverview(adapters);renderInstances(adapters);loadLegacy();$('config').textContent=JSON.stringify(config,null,2);renderTree('config',config);$('roles').textContent=JSON.stringify(roles,null,2);renderTree('roles',roles);$('users').textContent=JSON.stringify(users,null,2);renderTree('users',users);lastUsers=users;lastRoles=roles;renderManage();$('status').textContent=' Verbunden';}catch(error){$('status').textContent=' '+error.message;}}
                     const setupOptions={temperatureUnit:['°C','°F'],dateFormat:['DD.MM.YYYY','DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD'],isFloatComma:[[true,'Komma - 3,14'],[false,'Punkt - 3.14']],firstDayOfWeek:[['monday','Montag'],['sunday','Sonntag'],['saturday','Samstag']]};
                     function setupSelect(form,label,key,opts,val){const s=el('select');for(const o of opts){const [v,l]=Array.isArray(o)?o:[o,o];s.append(el('option',{value:String(v),textContent:l}));}s.value=String(val);return field(form,label,s);}
                     function showSetup(cfg){const form=$('setupForm');form.replaceChildren();const g=k=>cfg['system.'+k];const err=el('div',{className:'error'});
@@ -952,7 +1009,7 @@ namespace ioBroker_NewGen.Admin
                     ["ipc.ipcHost"] = ReadConfig("ipc.ipcHost", "127.0.0.1"),
                     ["ipc.ipcPort"] = ReadConfig("ipc.ipcPort", 5001),
                     ["adapter.customAdapterDirectory"] = ReadConfig("adapter.customAdapterDirectory", "Adapters/custom"),
-                    ["admin.adminPort"] = ReadConfig("admin.adminPort", 8080)
+                    ["web.port"] = ReadConfig("web.port", 8080)
                 };
                 foreach (var (key, fallback) in SystemSettings.Defaults)
                 {

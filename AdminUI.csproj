@@ -4,15 +4,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\bin\</OutputPath>
+    <OutputPath>bin\</OutputPath>
+    <HostRuntimePath Condition="'$(HostRuntimePath)' == ''">lib\ioBroker-NewGen.dll</HostRuntimePath>
+    <RsevUtilitiesPath Condition="'$(RsevUtilitiesPath)' == ''">lib\RSEV.Utilities.dll</RsevUtilitiesPath>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="lib\ioBroker-NewGen.dll;lib\RSEV.Utilities.dll" />
     <Reference Include="ioBroker-NewGen">
-      <HintPath>lib\ioBroker-NewGen.dll</HintPath>
+      <HintPath>$(HostRuntimePath)</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="RSEV.Utilities">
-      <HintPath>lib\RSEV.Utilities.dll</HintPath>
+      <HintPath>$(RsevUtilitiesPath)</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
