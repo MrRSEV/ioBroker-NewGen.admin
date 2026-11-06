@@ -17,8 +17,7 @@ is not part of the host executable.
   separate [`ioBroker-NewGen.web`](https://github.com/MrRSEV/ioBroker-NewGen.web)
   adapter.
 
-The dashboard markup and client-side code are currently embedded in
-[`AdminAdapter.cs`](./AdminAdapter.cs). There is no separate frontend build.
+The dashboard markup, CSS and JavaScript live in [`src/`](./src) and are embedded\nas resources at build time; [`Main.cs`](./Main.cs) is the adapter entry point.
 
 ## Build
 

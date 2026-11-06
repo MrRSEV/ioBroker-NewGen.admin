@@ -1,13 +1,13 @@
 # Admin UI HTTP API
 
-The API is registered by `AdminAdapter` through `IWebEndpointRegistry`.
+The API is registered by `Main` (`Main.cs`) through `IWebEndpointRegistry`.
 The dashboard is served at `/`, `/index.html`, and `/admin` by the separate
 `ioBroker-NewGen.web` adapter. The configured port defaults to `8080`
 (`web.port`).
 
 Protected API calls use the host's authentication/session and permission
 services. Request methods, payload validation, and permissions are enforced by
-the individual endpoint handlers in `AdminAdapter.cs`; consult those handlers
+the individual endpoint handlers in the namespace folders (`AdapterManagement`, `Auth`, `Jobs`, `Monitoring`, `Settings`); consult those handlers
 when changing or integrating a route.
 
 ## Routes

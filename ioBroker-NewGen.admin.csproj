@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Version>1.1.0</Version>
+    <AssemblyName>ioBroker-NewGen.admin-$(Version)</AssemblyName>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <InformationalVersion>1.1.0</InformationalVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="lib\**" />
+    <LibDll Include="lib\*.dll" />
+    <Reference Include="@(LibDll)">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="src\**" />
+    <EmbeddedResource Include="src\**\*.html;src\**\*.css;src\**\*.js"
+                      LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <!-- Erzeugt die Konstante AdminVersion.Value aus <Version>, damit die Version nur in dieser Datei gepflegt wird. -->
+  <Target Name="GenerateAdminVersion" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <AdminVersionFile>$(IntermediateOutputPath)AdminVersion.g.cs</AdminVersionFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(AdminVersionFile)"
+                      Lines="namespace ioBroker_NewGen.Admin%3B;internal static class AdminVersion;{;    public const string Value = &quot;$(Version)&quot;%3B;}"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(AdminVersionFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

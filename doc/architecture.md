@@ -2,7 +2,7 @@
 
 ## Runtime boundary
 
-`AdminAdapter` derives from `DeviceAdapterBase` and identifies itself as
+`Main` derives from `DeviceAdapterBase` and identifies itself as
 `admin`. It is an external custom-adapter assembly, not a second host process.
 The host supplies the `IAdapterContext`, including configuration, logging, the
 `IWebEndpointRegistry`, security services, adapter registry, and state matrix.
@@ -14,8 +14,7 @@ When stopped, Admin UI unregisters its routes so it can be restarted cleanly.
 `admin.adminEnabled` controls whether the service is started.
 
 The dashboard document and client-side code are embedded in
-`AdminAdapter.cs` in `DashboardEndpoint`; no separate static web application or
-asset pipeline is required.
+`src/` (index.html, admin.css, js/*.js) and embedded as resources; `Ui/DashboardPage.cs`\nassembles them. No separate asset pipeline is required.
 
 ## Responsibilities and ownership
 
@@ -33,8 +32,7 @@ registries, state stores, or security implementations. Changes to
 
 ## Source and build layout
 
-- `AdminAdapter.cs` contains adapter lifecycle, endpoint registration, endpoint
-  handlers, and the embedded dashboard.
+- `Main.cs` contains adapter lifecycle and endpoint registration; handlers live in\n  `ioBroker_NewGen.Admin.*` namespaces (folders `AdapterManagement`, `Auth`, `Jobs`,\n  `Monitoring`, `Settings`, `Http`, `Ui`). `AdminVersion.Value` is generated from the csproj `Version`.
 - `AdminUI.csproj` targets .NET 9 and references the host/runtime assemblies
   under `lib`.
 - `lib/ioBroker-NewGen.dll` is the host API contract used at compile time.
