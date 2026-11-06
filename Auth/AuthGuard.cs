@@ -26,7 +26,8 @@ internal static class AuthGuard
 
     internal static SecurityService? SecurityOf(IAdapterContext context)
     {
-        return (context.RuntimeContext as MainRuntimeContext)?.Security;
+        // Adapter erhalten einen Proxy statt des MainRuntimeContext; daher auf die Prozess-Instanz zurückfallen.
+        return (context.RuntimeContext as MainRuntimeContext ?? MainRuntimeContext.Instance).Security;
     }
 
     internal static string? GetHeader(EndpointRequest request, string name)

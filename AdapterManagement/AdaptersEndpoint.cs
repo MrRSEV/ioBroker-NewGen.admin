@@ -49,8 +49,7 @@ internal sealed class AdaptersEndpoint : BaseRuntimeEndpoint
                     : IsAutoStart(enabledAdapters, adapter),
                 LegacyInstance = _context.Legacy?.IsInstance(adapter.Id) == true,
                 HasConfig = _context.AdapterRegistry.Configs.HasConfig(adapter.Name),
-                AutoStartEditable = adapter.Type == AdapterType.Custom &&
-                    !string.Equals(adapter.Name, "admin", StringComparison.OrdinalIgnoreCase),
+                AutoStartEditable = adapter.Type == AdapterType.Custom && !CoreAdapters.IsCore(adapter.Name),
                 adapter.Metadata,
                 adapter.TcpEndpoint,
                 adapter.RegisteredAt,

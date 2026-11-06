@@ -74,8 +74,7 @@ internal sealed class InstanceEndpoint : BaseRuntimeEndpoint
             return Response(400, "{\"error\":\"Unbekannte Aktion\"}", "application/json; charset=utf-8");
         }
 
-        if (registration is null || registration.Type != AdapterType.Custom ||
-            string.Equals(registration.Name, "admin", StringComparison.OrdinalIgnoreCase))
+        if (registration is null || registration.Type != AdapterType.Custom || CoreAdapters.IsCore(registration.Name))
         {
             return Response(400, "{\"error\":\"Für diesen Adapter sind keine weiteren Instanzen möglich\"}", "application/json; charset=utf-8");
         }

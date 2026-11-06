@@ -53,8 +53,7 @@ internal sealed class AutostartEndpoint : BaseRuntimeEndpoint
             return Task.FromResult(Response(404, "{\"error\":\"Adapter nicht gefunden\"}", "application/json; charset=utf-8"));
         }
 
-        if (adapter.Type != AdapterType.Custom ||
-            string.Equals(adapter.Name, "admin", StringComparison.OrdinalIgnoreCase))
+        if (adapter.Type != AdapterType.Custom || CoreAdapters.IsCore(adapter.Name))
         {
             return Task.FromResult(Response(400, "{\"error\":\"Autostart ist für diesen Adapter nicht änderbar\"}", "application/json; charset=utf-8"));
         }

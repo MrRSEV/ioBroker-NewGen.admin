@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.1] - 2026-11-06
+
+### Fixed
+- Anmeldung: Der Zugriff auf Core.Security funktioniert wieder (Adapter erhalten einen Runtime-Proxy statt des MainRuntimeContext).
+
+### Changed
+- Die Adapter `web` und `admin` haben keinen Button "Instanz entfernen" mehr, keinen Autostart-Toggle und keine weiteren Instanzen (serverseitig geprüft, `CoreAdapters`).
+- Stoppen/Neustarten von `web.0` zeigt dieselbe Warnung wie `admin.0`.
+- Gebaut gegen Runtime `2.1.1-beta`.
+
 ## [1.1.0] - 2026-11-06
 
 ### Added
