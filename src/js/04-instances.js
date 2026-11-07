@@ -17,6 +17,11 @@ timer=setInterval(async()=>{if(cfgOpen!==a.Id){stop();return;}try{const r=await 
 cancel.onclick=async()=>{try{await api('/api/adapters/oauth',{action:'cancel',sessionId:sid});}catch{}};
 return el('div',{className:'oauth'},el('strong',{textContent:o.label+': '}),st,document.createTextNode(' '),btn,cancel,link,el('small',{className:'muted',textContent:t('cfg.redirect','Redirect-URI beim Anbieter registrieren: ')+o.redirectUri}));}
 async function openConfig(a,note){let info;try{info=await api('/api/adapters/config',{adapterId:a.Id,action:'get'});}catch(e){alert(e.message);return;}
+if(info.legacyUi){cfgOpen=a.Id;const view=$('cfgView');const theme=document.documentElement.classList.contains('dark')?'dark':'light';
+const frame=el('iframe',{className:'legacy-admin-frame legacy-config-frame',title:a.Id,src:info.legacyUi+'&react='+theme});
+const onMessage=e=>{if(e.source!==frame.contentWindow)return;if(e.data==='close'){window.removeEventListener('message',onMessage);closeConfig();}};
+window.addEventListener('message',onMessage);
+view.replaceChildren(el('h3',{textContent:a.Id}),frame);$('instList').classList.add('hidden');view.classList.remove('hidden');nav('instances');return;}
 const data=JSON.parse(JSON.stringify(info.values||{}));const ctx={updates:[]};
 cfgOpen=a.Id;const view=$('cfgView');const form=el('form',{className:'cfgform'});const err=el('div',{className:'error'});
 cfgBuild(form,info.jsonConfig||cfgFallback(data),'',data,ctx);

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.3.0] - 2026-11-07
+
+### Added
+- Objects tab: tree is collapsed by default, with expand-all/collapse-all buttons and deep links (`#tab-objects/select/<id>`).
+- Objects tab: columns ID, name, type, role, room, function and value; values refresh live.
+- Writable states can be changed directly: switch for booleans, number/text input for other types. Inputs are locked until double-clicked and are written with Enter (Esc cancels).
+- New endpoint `POST /api/states/write` (permission `StateWrite`), writes with `ack=false`.
+
+### Changed
+- Built against Runtime `2.4.0-beta`.
+
+## [1.2.0] - 2026-11-07
+
+### Added
+- Native Admin discovers legacy adapter tabs from `common.adminTab` and displays them in the sidebar in an iframe.
+- Legacy adapter admin files are served through an authenticated route; the ioBroker WebSocket client is embedded in the Admin assembly.
+
+### Changed
+- Built against Runtime `2.3.0-beta`.
+
 ## [1.1.1] - 2026-11-06
 
 ### Fixed

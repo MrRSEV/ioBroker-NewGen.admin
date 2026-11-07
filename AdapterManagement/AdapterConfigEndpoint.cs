@@ -102,11 +102,20 @@ internal sealed class AdapterConfigEndpoint : BaseRuntimeEndpoint
                 });
             }
 
+            string? legacyUi = null;
+            if (schema.JsonConfig is null && registration.Type == AdapterType.IoBroker &&
+                _context.Legacy?.GetInstalled().FirstOrDefault(p => string.Equals(p.Name, registration.Name, StringComparison.OrdinalIgnoreCase)) is { } package &&
+                File.Exists(Path.Combine(package.Directory, "admin", "index_m.html")))
+            {
+                legacyUi = $"/adapter/{registration.Name}/index_m.html?{registration.Id[(registration.Id.LastIndexOf('.') + 1)..]}";
+            }
+
             return Ok(new JsonObject
             {
                 ["adapterId"] = registration.Id,
                 ["name"] = registration.Name,
                 ["type"] = registration.Type.ToString(),
+                ["legacyUi"] = legacyUi,
                 ["autoRestart"] = managed,
                 ["running"] = running,
                 ["oauth"] = oauth,

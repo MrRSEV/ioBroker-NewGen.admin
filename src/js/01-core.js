@@ -1,7 +1,8 @@
 const $=id=>document.getElementById(id);let timer=null;
 function nav(name){document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('hidden',p.dataset.panel!==name));document.querySelectorAll('.drawer .item').forEach(i=>i.classList.toggle('sel',i.dataset.panel===name));localStorage.setItem('ngPanel',name);history.replaceState(null,'','#tab-'+name);}
 document.querySelectorAll('.drawer .item').forEach(i=>i.onclick=()=>nav(i.dataset.panel));
-nav(location.hash.startsWith('#tab-')&&document.querySelector('.drawer .item[data-panel="'+location.hash.slice(5)+'"]')?location.hash.slice(5):document.querySelector('.drawer .item[data-panel="'+localStorage.getItem('ngPanel')+'"]')?localStorage.getItem('ngPanel'):'overview');
+const ngInitialHash=location.hash;const ngHashPanel=location.hash.startsWith('#tab-')?location.hash.slice(5).split('/')[0]:'';
+nav(ngHashPanel&&document.querySelector('.drawer .item[data-panel="'+ngHashPanel+'"]')?ngHashPanel:document.querySelector('.drawer .item[data-panel="'+localStorage.getItem('ngPanel')+'"]')?localStorage.getItem('ngPanel'):'overview');
 function setCompact(on){document.body.classList.toggle('compact',on);localStorage.setItem('ngCompact',on?'1':'');}
 setCompact(!!localStorage.getItem('ngCompact'));
 $('menuBtn').onclick=()=>setCompact(!document.body.classList.contains('compact'));

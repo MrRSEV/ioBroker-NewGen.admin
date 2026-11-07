@@ -3,6 +3,7 @@ using ioBroker_NewGen.Admin.Auth;
 using ioBroker_NewGen.Admin.Jobs;
 using ioBroker_NewGen.Admin.Monitoring;
 using ioBroker_NewGen.Admin.Settings;
+using ioBroker_NewGen.Admin.Socket;
 using ioBroker_NewGen.Admin.Ui;
 using ioBroker_NewGen.Core.Adapters;
 using ioBroker_NewGen.Core.Web;
@@ -84,11 +85,23 @@ public sealed class Main : DeviceAdapterBase
     private void RegisterEndpoints()
     {
         var web = Context.WebEndpoints;
+        var legacyTabs = new LegacyAdminTabEndpoints(Context);
 
         foreach (var route in new[] { "/", "/index.html", "/admin" })
         {
             web.Register(Id, new DashboardEndpoint(route));
         }
+
+        web.Register(Id, "/api/adapters/tabs", WebEndpointKind.Http,
+            (request, _) => Task.FromResult(legacyTabs.GetTabs(request)));
+        web.Register(Id, "/adapter/*", WebEndpointKind.Http,
+            (request, _) => Task.FromResult(legacyTabs.ServeAdapterFile(request)));
+        web.Register(Id, "/lib/js/socket.io.js", WebEndpointKind.Http,
+            (_, _) => Task.FromResult(legacyTabs.ServeSocketClient()));
+        web.Register(Id, "/_socket/info.js", WebEndpointKind.Http,
+            (request, _) => Task.FromResult(legacyTabs.ServeSocketInfo(request)));
+        web.Register(Id, "/", WebEndpointKind.WebSocket,
+            new LegacyAdminSocketEndpoint(Context).HandleAsync);
 
         // Anmeldung und Benutzerkonto
         web.Register(Id, new LoginEndpoint(Context));
@@ -122,6 +135,7 @@ public sealed class Main : DeviceAdapterBase
         // Hintergrundaufgaben und Systemüberblick
         web.Register(Id, new TasksEndpoint(Context));
         web.Register(Id, new StatesEndpoint(Context));
+        web.Register(Id, new StateWriteEndpoint(Context));
         web.Register(Id, new LogsEndpoint(Context));
         web.Register(Id, new OverviewEndpoint(Context));
 

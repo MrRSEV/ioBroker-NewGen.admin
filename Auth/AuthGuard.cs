@@ -73,7 +73,9 @@ internal static class AuthGuard
         return route switch
         {
             "/api/states" => SecurityPermissions.StateRead,
-            "/api/adapters" => SecurityPermissions.AdapterRead,
+            "/api/states/write" => SecurityPermissions.StateWrite,
+            "/api/adapters" or "/api/adapters/tabs" => SecurityPermissions.AdapterRead,
+            _ when route.StartsWith("/adapter/", StringComparison.OrdinalIgnoreCase) => SecurityPermissions.AdapterRead,
             "/api/adapters/start" => SecurityPermissions.AdapterStart,
             "/api/adapters/stop" => SecurityPermissions.AdapterStop,
             "/api/adapters/restart" => SecurityPermissions.AdapterRestart,
