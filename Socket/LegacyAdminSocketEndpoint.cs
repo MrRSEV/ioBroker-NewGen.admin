@@ -28,7 +28,9 @@ internal sealed class LegacyAdminSocketEndpoint
 
         var authRequest = new EndpointRequest
         {
-            Route = "/",
+            Route = request.Route.StartsWith("/adapter/", StringComparison.OrdinalIgnoreCase)
+                ? "/adapter/"
+                : "/",
             Headers = request.Headers.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase),
             Body = Array.Empty<byte>()
         };
@@ -100,17 +102,25 @@ internal sealed class LegacyAdminSocketEndpoint
                 : Array.Empty<JsonElement>();
             try
             {
-                var result = Execute(name, args, request.Query, subscriptions);
+                var result = Execute(name, args, request.Query, subscriptions, AdapterNameFromRoute(request.Route));
                 if (type == 3)
                 {
-                    await SendCallbackAsync(socket, sendLock, id, null, result, cancellationToken);
+                    await SendCallbackAsync(
+                        socket,
+                        sendLock,
+                        id,
+                        null,
+                        result,
+                        string.Equals(name, "sendTo", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(name, "sendToHost", StringComparison.OrdinalIgnoreCase),
+                        cancellationToken);
                 }
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
             {
                 if (type == 3)
                 {
-                    await SendCallbackAsync(socket, sendLock, id, exception.Message, null, cancellationToken);
+                    await SendCallbackAsync(socket, sendLock, id, exception.Message, null, false, cancellationToken);
                 }
             }
         }
@@ -163,7 +173,7 @@ internal sealed class LegacyAdminSocketEndpoint
         }
     }
 
-    private object? Execute(string name, JsonElement[] args, string query, ClientSubscriptions subscriptions)
+    private object? Execute(string name, JsonElement[] args, string query, ClientSubscriptions subscriptions, string? routeAdapterName)
     {
         var api = _context.Legacy?.Api
             ?? throw new InvalidOperationException("Legacy-Adapter-Runtime ist nicht initialisiert.");
@@ -180,13 +190,28 @@ internal sealed class LegacyAdminSocketEndpoint
             case "getAdapterName":
                 return "ioBroker-NewGen";
             case "getCurrentInstance":
-                return QueryValue(query, "name") is { Length: > 0 } adapterName ? adapterName + ".0" : "javascript.0";
+                var adapterName = QueryValue(query, "name") ?? routeAdapterName;
+                return !string.IsNullOrWhiteSpace(adapterName) ? adapterName + ".0" : "javascript.0";
             case "getObject":
             case "getForeignObject":
+            case "getObjectById":
                 return GetObjectNode(api, StringArg(args, 0));
             case "getObjects":
             case "getForeignObjects":
+            case "getObjectsById":
             {
+                if (args.Length > 0 && args[0].ValueKind == JsonValueKind.Array)
+                {
+                    var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+                    foreach (var item in args[0].EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String))
+                    {
+                        var id = item.GetString()!;
+                        result[id] = GetObjectNode(api, id);
+                    }
+
+                    return result;
+                }
+
                 var pattern = StringArg(args, 0, "*");
                 var objectType = StringArg(args, 1, null);
                 return api.GetObjectNodes(pattern, objectType);
@@ -241,8 +266,28 @@ internal sealed class LegacyAdminSocketEndpoint
                 var states = api.GetStatePayloads(StringArg(args, 0, "*")).ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
                 return states;
             }
+            case "setState":
+            case "setForeignState":
+            {
+                var stateId = StringArg(args, 0);
+                if (args.Length < 2)
+                {
+                    throw new ArgumentException("Socket-Argument 2 fehlt oder ist ungültig.");
+                }
+
+                var state = args[1];
+                var value = StateValue(state);
+                var ack = StateAck(state, args);
+                if (!api.SetStateValue(stateId, value, ack))
+                {
+                    throw new InvalidOperationException($"State '{stateId}' konnte nicht geschrieben werden.");
+                }
+
+                return null;
+            }
             case "getCompactSystemConfig":
-                return api.GetObjectNode("system.config");
+            case "getSystemConfig":
+                return GetObjectNode(api, "system.config");
             case "getHostByIp":
                 return null;
             case "getCompactInstances":
@@ -379,6 +424,15 @@ internal sealed class LegacyAdminSocketEndpoint
     private JsonNode? GetObjectNode(NodeAdapterRuntimeApi api, string id)
     {
         var document = api.GetObjectNode(id) ?? GetInstanceDocuments(api, string.Empty).GetValueOrDefault(id);
+        if (document is JsonObject objectNode &&
+            (!objectNode.TryGetPropertyValue("_id", out var objectId) ||
+             objectId is null ||
+             objectId.GetValueKind() != JsonValueKind.String ||
+             string.IsNullOrWhiteSpace(objectId.GetValue<string>())) )
+        {
+            objectNode["_id"] = id;
+        }
+
         if (document is JsonObject instance && TryGetConfigurableInstance(id, out var registration))
         {
             var configs = _context.AdapterRegistry.Configs;
@@ -452,6 +506,39 @@ internal sealed class LegacyAdminSocketEndpoint
         };
     }
 
+    private static object? StateValue(JsonElement state)
+    {
+        if (state.ValueKind == JsonValueKind.Object && state.TryGetProperty("val", out var value))
+        {
+            state = value;
+        }
+
+        return state.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => state.GetString(),
+            JsonValueKind.Number when state.TryGetInt64(out var integer) => integer,
+            JsonValueKind.Number => state.GetDouble(),
+            _ => JsonNode.Parse(state.GetRawText())
+        };
+    }
+
+    private static bool StateAck(JsonElement state, JsonElement[] args)
+    {
+        if (state.ValueKind == JsonValueKind.Object &&
+            state.TryGetProperty("ack", out var ack) &&
+            (ack.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        {
+            return ack.GetBoolean();
+        }
+
+        return args.Length > 2 &&
+               (args[2].ValueKind is JsonValueKind.True or JsonValueKind.False) &&
+               args[2].GetBoolean();
+    }
+
     private bool TryGetConfigurableInstance(string objectId, out ioBroker_NewGen.Core.Registry.AdapterRegistration registration)
     {
         const string prefix = "system.adapter.";
@@ -513,9 +600,12 @@ internal sealed class LegacyAdminSocketEndpoint
         int id,
         string? error,
         object? result,
+        bool singleResult,
         CancellationToken cancellationToken)
     {
-        object?[] callbackArguments = error is null ? new object?[] { null, result } : new object?[] { error };
+        object?[] callbackArguments = singleResult
+            ? new object?[] { error is null ? result : new { error } }
+            : error is null ? new object?[] { null, result } : new object?[] { error };
         var frame = JsonSerializer.Serialize(new object?[] { 3, id, null, callbackArguments });
         await sendLock.WaitAsync(cancellationToken);
         try { await socket.SendTextAsync(frame, cancellationToken); }
@@ -551,6 +641,18 @@ internal sealed class LegacyAdminSocketEndpoint
             {
                 return separator < 0 ? string.Empty : Uri.UnescapeDataString(part[(separator + 1)..].Replace('+', ' '));
             }
+        }
+
+        return null;
+    }
+
+    private static string? AdapterNameFromRoute(string route)
+    {
+        var parts = route.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2 && string.Equals(parts[0], "adapter", StringComparison.OrdinalIgnoreCase) &&
+            LegacyAdapterPackage.IsValidName(parts[1]))
+        {
+            return parts[1];
         }
 
         return null;

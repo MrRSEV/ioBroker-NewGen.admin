@@ -100,8 +100,12 @@ public sealed class Main : DeviceAdapterBase
             (_, _) => Task.FromResult(legacyTabs.ServeSocketClient()));
         web.Register(Id, "/_socket/info.js", WebEndpointKind.Http,
             (request, _) => Task.FromResult(legacyTabs.ServeSocketInfo(request)));
-        web.Register(Id, "/", WebEndpointKind.WebSocket,
-            new LegacyAdminSocketEndpoint(Context).HandleAsync);
+        var legacySocket = new LegacyAdminSocketEndpoint(Context);
+        web.Register(Id, "/", WebEndpointKind.WebSocket, legacySocket.HandleAsync);
+        // socket.io clients differ between legacy adapter versions: some use
+        // the web-root socket, others keep the adapter-derived /socket.io path.
+        // Both routes terminate in the same legacy protocol endpoint.
+        web.Register(Id, "/adapter/*", WebEndpointKind.WebSocket, legacySocket.HandleAsync);
 
         // Anmeldung und Benutzerkonto
         web.Register(Id, new LoginEndpoint(Context));

@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Legacy-Adapter-Konfigurationen übernehmen das dunkle Admin-Theme jetzt auch auf iframe- und Body-Ebene; WLED bleibt beim Öffnen der Konfiguration nicht mehr mit weißem Hintergrund.
+- `sendTo`-Callbacks werden mit der erwarteten Einzelargument-Signatur an moderne Admin-Tabs geliefert; Alexa-Geräte V3 erhält dadurch das Ergebnis statt eines leeren ersten Callback-Arguments.
+- `getObject`/`getObjectById` ergänzen bei Runtime-Objekten ohne `_id` die angeforderte ID, damit Alexa-Geräte V3 beim Hinzufügen eines Geräts gültige `setObject`-Argumente sendet.
+
+- Admin-Layout: Legacy-Adapter-Konfigurations-iFrames nutzen jetzt die volle verfügbare Breite bis zum rechten Bildschirmrand; zusätzlich wird der mobile Viewport mit `width=device-width` gesetzt.
+- Legacy-Admin-Socket: `getObjects` unterstützt jetzt ID-Arrays und die Kompatibilitäts-Aliase `getObjectById`/`getObjectsById`, damit moderne Admin-Tabs ihre Einzelobjekte korrekt laden können.
+- Legacy-Adapter-iframe: Der Socket unterstützt jetzt `setState` und `setForeignState` inklusive `val`-/`ack`-Payload. Dadurch kann der iot-Hinweis zum geänderten Skill-Linking-Prozess bestätigt und geschlossen werden.
+- Legacy-Adapter-iframe: Der moderne iot-Socket-Client verwendet jetzt den vollständigen Adapterpfad, ohne den internen Web-Modus zu aktivieren; die aktuelle Legacy-Instanz wird zusätzlich aus der WebSocket-Route ermittelt, damit die Konfigurationsseite ihre Admin-Anfragen ausführen kann.
+- Legacy-Adapter-Konfiguration: Die Socket-Bibliothek wird beim Öffnen der iot.0-Konfiguration korrekt über den Adapter-Pfad geladen; moderne und ältere Admin-Oberflächen verwenden außerdem die passende Socket-URL.
+- Legacy-Adapter-Konfiguration: Der Socket-Befehl `getSystemConfig` wird unterstützt, damit moderne Adapter-Adminseiten nach dem Verbindungsaufbau nicht im Ladebildschirm hängen bleiben.
+- Legacy-Adapter-Konfiguration: Der Legacy-Socket ist sowohl über den Web-Root als auch über adapterbasierte `/adapter/*`-Socketpfade erreichbar; die Systemkonfiguration verwendet dabei den vorhandenen Fallback.
+
+### Changed
+- Dokumentation des Legacy-Adapters `iobroker.iot` aktualisiert: Alexa-Geräte V3 und Adapterbetrieb geprüft; Services/IFTTT noch ungetestet und intelligente Raumaufteilung noch nicht implementiert.
+- Legacy-Adapter-ZIP-Import runs `npm install` and then `npm run build` after extraction; command output is available in the Admin task log.
+- ZIP imports now allow up to 10 GiB of uncompressed data and 1,000,000 entries.
+
 ## [1.3.0] - 2026-11-07
 
 ### Added

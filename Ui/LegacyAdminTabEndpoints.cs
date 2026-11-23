@@ -70,10 +70,20 @@ internal sealed class LegacyAdminTabEndpoints
         }
 
         var relativePath = parts.Length == 2 ? "index.html" : Path.Combine(parts.Skip(2).ToArray());
-        if (relativePath.Replace('\\', '/').EndsWith("/_socket/info.js", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(relativePath.Replace('\\', '/'), "_socket/info.js", StringComparison.OrdinalIgnoreCase))
+        var normalizedRelativePath = relativePath.Replace('\\', '/');
+        if (normalizedRelativePath.EndsWith("/_socket/info.js", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedRelativePath, "_socket/info.js", StringComparison.OrdinalIgnoreCase))
         {
             return SocketInfo(request);
+        }
+
+        // Some modern legacy admin builds (e.g. iot) load the socket client as
+        // "./lib/js/socket.io.js" from index_m.html. That resolves to
+        // /adapter/<name>/lib/js/socket.io.js, but the client is supplied by
+        // NewGen and is not part of the installed adapter package.
+        if (IsSocketClientPath(normalizedRelativePath))
+        {
+            return ServeSocketClient();
         }
 
         var adminRoot = Path.GetFullPath(Path.Combine(package.Directory, "admin"));
@@ -117,14 +127,25 @@ internal sealed class LegacyAdminTabEndpoints
     {
         html = html.Replace("\"../../", "\"/adapter/" + LegacyAssetsSegment + "/", StringComparison.Ordinal)
             .Replace("'../../", "'/adapter/" + LegacyAssetsSegment + "/", StringComparison.Ordinal);
-        const string socketSetup = "<script>window.socketPath=location.origin+'/';</script>";
+        const string viewport = "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+        const string themeSetup = "<script>(function(){var p=new URLSearchParams(window.location.search);if(p.get('react')==='dark'){document.documentElement.classList.add('newgen-dark');}})();</script><style>html.newgen-dark,html.newgen-dark body,html.newgen-dark body>.m.adapter-container,html.newgen-dark .admin-dialog-body{background-color:#272727!important;color:#fff!important}</style>";
+        // Modern React admin builds pass socketPath to @iobroker/socket-client as
+        // a URL suffix, while the older adapter-settings.js expects socketPath
+        // to be the complete socket URL. Keep both variants working.
+        var modernSocketClient = html.Contains("./lib/js/socket.io.js", StringComparison.Ordinal);
+        var socketSetup = modernSocketClient
+            ? "<script>window.socketPath=location.pathname.substring(0,location.pathname.lastIndexOf('/')+1);</script>"
+            : "<script>window.socketPath=location.origin+'/';</script>";
+        var setup = viewport + themeSetup + socketSetup;
         var head = html.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
-        return head < 0 ? socketSetup + html : html.Insert(head + "<head>".Length, socketSetup);
+        return head < 0
+            ? setup + html
+            : html.Insert(head + "<head>".Length, setup);
     }
 
     private WebEndpointResponse ServeLegacyAsset(string relativePath)
     {
-        if (string.Equals(relativePath, "socket.io/socket.io.js", StringComparison.Ordinal))
+        if (IsSocketClientPath(relativePath))
         {
             return ServeSocketClient();
         }
@@ -156,6 +177,13 @@ internal sealed class LegacyAdminTabEndpoints
             },
             Body = memory.ToArray()
         };
+    }
+
+    private static bool IsSocketClientPath(string path)
+    {
+        var normalized = path.Replace('\\', '/').TrimStart('/');
+        return string.Equals(normalized, "lib/js/socket.io.js", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalized, "socket.io/socket.io.js", StringComparison.OrdinalIgnoreCase);
     }
 
     public WebEndpointResponse ServeSocketClient()
